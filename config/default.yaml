@@ -1,0 +1,57 @@
+# Default configuration for ---- Automated Trading Agent ----
+
+app:
+  name: ---- Automated Trading Agent ----
+  version: 0.1.0
+  description: "LLM-powered Automated Trading Agent"
+
+trading:
+  default_pair: "BTC/USD"
+  simulation_mode: true  # Enable/Disable simulation
+  risk_level: "medium"   # Options: low, medium, high
+  iterations: 10         # Default number of simulation steps
+
+data:
+  # Define multiple data sources for flexibility
+  sources:
+    - name: "example_cex"
+      type: "exchange"
+      base_url: "https://api.example.com"
+      enabled: true
+    - name: "example_blockchain"
+      type: "blockchain"
+      base_url: "https://api.blockchain.com"
+      enabled: false
+  update_interval: 60  # Data fetch interval in seconds
+
+assets:
+  # User portfolio configuration
+  BTC: 0.5     # Bitcoin holdings
+  ETH: 5.0     # Ethereum holdings
+  USD: 10000.0 # Cash reserve in USD
+
+prices:
+  # Initial asset prices
+  BTC: 40000.0
+  ETH: 2500.0
+
+volatility:
+  # Asset price fluctuation range (used in simulation)
+  BTC: 0.02    # ±2%
+  ETH: 0.03    # ±3%
+
+logging:
+  level: "INFO"  # Logging level: DEBUG, INFO, WARNING, ERROR
+  file: "logs/trading.log"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  enabled: true   # Toggle logging to file on/off
+
+# Optional advanced settings for scaling
+advanced:
+  # GPU-specific configuration if using CUDA
+  gpu:
+    enabled: false
+    device: "cuda:0"  # Device index for CUDA (if enabled)
+  optimization:
+    enable_cache: true
+    cache_dir: "/tmp/prodigal_cache"

@@ -1,5 +1,5 @@
 # Automated-Trading-Agent
-#Team -
+
 
 
 

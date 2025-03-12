@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class HelloTrading:
     """Simple trading simulation for demonstration purposes."""
 
-    def __init__(self, config_file="E:\Automated-Trading\default.yaml"):
+    def __init__(self, config_file="C:\Users\SHASHANK MUTYALA\Automated-Trading-Agent\config\default.yaml"):
         # Load configurations
         self.config = self.load_config(config_file)
 

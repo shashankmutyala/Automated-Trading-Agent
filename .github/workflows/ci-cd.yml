@@ -73,4 +73,4 @@ jobs:
       with:
         context: .
         push: true
-        tags: ${{ secrets.DOCKER_USERNAME }}/prodigal-ai:latest
+        tags: ${{ secrets.DOCKER_USERNAME }}/automated-trading-agent:latest

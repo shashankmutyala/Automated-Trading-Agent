@@ -1,5 +1,5 @@
 # Base image with CUDA support for ML/LLM workloads
-FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04
+FROM nvidia/cuda:11.6.0-runtime-ubuntu22.04
 
 # Set working directory
 WORKDIR /app

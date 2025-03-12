@@ -22,6 +22,9 @@ COPY --chown=appuser:appuser requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt && \
     rm -rf ~/.cache/pip
 
+# Copy the config directory into the container
+COPY --chown=appuser:appuser config/ ./config
+
 # Copy application code
 COPY --chown=appuser:appuser . .
 

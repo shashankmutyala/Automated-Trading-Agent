@@ -79,7 +79,6 @@ Automated-Trading-Agent/
 └── README.md                       # Project Overview
 └── .dockerignore                   # Docker Ignore Rules
 ```
-```
 
 ## **🚀 Features**
 ✅ **Real-time Market Data** - Fetches data from **blockchain explorers, CEX APIs, and social sentiment sources.**  

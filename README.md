@@ -1,4 +1,4 @@
-# **Automated Trading Agent**
+# **Automated Trading Agent - Project Documentation**
 
 ## **📌 Overview**
 The **Automated Trading Agent** is a **modular, AI-driven crypto trading system** that integrates **machine learning models, on-chain & off-chain data sources, and LLM-based analysis** to optimize trading strategies. The system is designed to support **real-time trade execution, market analysis, and risk management.**
@@ -108,7 +108,20 @@ pip install -r requirements.txt
 python src/main.py
 ```
 
+## **🐳 Set Up Docker**
+### **1️⃣ Build the Docker Image**
+```bash
+docker build -t automated-trading-agent .
+```
 
+### **2️⃣ Run the Docker Container**
+```bash
+docker run --rm --gpus all automated-trading-agent
+```
 
+## **📜 License**
+This project is licensed under the **MIT License**.
 
+## **📌 Disclaimer**
+This project is intended for **educational and research purposes only**. Cryptocurrency trading involves risk, and **we are not responsible for any financial losses** incurred using this software. Please conduct thorough research and comply with financial regulations before deploying this system in a live environment.
 

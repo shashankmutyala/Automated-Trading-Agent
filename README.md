@@ -1,4 +1,4 @@
-## **Automated Trading Agent - Project Documentation**
+ ## **Automated Trading Agent - Project Documentation**
 
 ## **📌 Overview**
 The **Automated Trading Agent** is a **modular, AI-driven crypto trading system** that integrates **machine learning models, on-chain & off-chain data sources, and LLM-based analysis** to optimize trading strategies. The system is designed to support **real-time trade execution, market analysis, and risk management.**

@@ -77,6 +77,8 @@ Automated-Trading-Agent/
 ├── .github/workflows/ci-cd.yml     # CI/CD pipeline for testing & deployment
 ├── .gitignore                      # Git Ignore Rules
 └── README.md                       # Project Overview
+└── .dockerignore                   # Docker Ignore Rules
+```
 ```
 
 ## **🚀 Features**

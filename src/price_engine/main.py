@@ -2,8 +2,8 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from price_engine.websockets.binance_ws import binance_ws
-from db.mongodb_handler import MongoDBHandler
-from processor import calculate_moving_average
+from price_engine.db.mongodb_handler import MongoDBHandler
+from price_engine.processor import calculate_moving_average
 import asyncio
 
 

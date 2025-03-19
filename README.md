@@ -12,25 +12,36 @@ Automated-Trading-Agent/
 │   ├── production.yaml             # Production-specific settings
 │   ├── secrets.yaml                # Encrypted sensitive data
 │   ├── loaders.py                  # Loads and validates configs
-│   ├── __init__.py                  # Package initializer
+│   ├── __init__.py                 # Package initializer
 │
 ├── src/                            # Backend Core Logic
 │   ├── main.py                     # Main application entry point
-│   ├── __init__.py                  # Package initializer
+│   ├── __init__.py                 # Package initializer
 │   │
 │   ├── data_ingestion/             # Data Retrieval & Ingestion Pipelines
 │   │   ├── blockchain_provider.py  # Fetch on-chain data (Etherscan, BSCScan)
 │   │   ├── cex_api_provider.py     # Fetch market data from Binance, OKX
 │   │   ├── social_sentiment.py     # Scrape Twitter, Telegram, Discord, RSS
 │   │   ├── preprocessors.py        # Clean & structure data
-│   │   ├── __init__.py              # Package initializer
+│   │   ├── __init__.py             # Package initializer
+│   │
+│   ├── price_engine/               # Price Engine for Real-Time Data
+│   │   ├── websockets/             # WebSocket Handlers for Data Sources
+│   │   │   ├── binance_ws.py       # Fetch BTC/ETH data from Binance
+│   │   ├── db/                     # Database Storage Handlers
+│   │   │   ├── mongodb_handler.py  # Store price data in MongoDB
+│   │   │   ├── mysql_handler.py    # Store price data in MySQL
+│   │   ├── processor.py            # Data processing for trading decisions
+│   │   ├── risk_management.py      # Risk management logic
+│   │   ├── order_executor.py       # Place buy/sell orders
+│   │   ├── __init__.py             # Package initializer
 │   │
 │   ├── models/                     # AI/ML Models for Market Analysis
 │   │   ├── trend_predictor.py      # Predict price movements
 │   │   ├── sentiment_analysis.py   # NLP-based sentiment analysis
 │   │   ├── rl_trading_model.py     # Reinforcement learning trading agent
 │   │   ├── retrain_pipeline.py     # Model retraining & optimization
-│   │   ├── __init__.py              # Package initializer
+│   │   ├── __init__.py             # Package initializer
 │   │
 │   ├── llm_agents/                 # AI Trading Agents
 │   │   ├── data_agent.py           # Fetch real-time & historical market data
@@ -38,35 +49,35 @@ Automated-Trading-Agent/
 │   │   ├── trading_agent.py        # Executes trades and strategies
 │   │   ├── risk_manager.py         # Implements risk management strategies
 │   │   ├── self_learning_agent.py  # Adaptive RL-based agent
-│   │   ├── __init__.py              # Package initializer
+│   │   ├── __init__.py             # Package initializer
 │   │
 │   ├── execution/                  # Trade Execution & Strategy Orchestration
 │   │   ├── strategy_orchestrator.py# Executes and manages trading strategies
 │   │   ├── order_executor.py       # Places/cancels trades via broker APIs
 │   │   ├── broker_api.py           # Interfaces with CEX/DEX APIs
-│   │   ├── __init__.py              # Package initializer
+│   │   ├── __init__.py             # Package initializer
 │   │
 │   ├── api/                        # API Layer (REST/WebSocket)
 │   │   ├── api_routes.py           # REST API endpoints (FastAPI/Flask)
 │   │   ├── trade_execution.py      # Trading API layer (Binance, etc.)
-│   │   ├── __init__.py              # Package initializer
+│   │   ├── __init__.py             # Package initializer
 │
 │   ├── database/                   # Data Storage (Trade History, AI Training Data)
 │   │   ├── trade_history.db        # Stores trade history (PostgreSQL)
 │   │   ├── vector_store.py         # Vector database for embeddings
-│   │   ├── __init__.py              # Package initializer
+│   │   ├── __init__.py             # Package initializer
 │
 │   ├── observability/              # Logging, Monitoring & Alerts
 │   │   ├── logging.py              # Advanced logging setup
 │   │   ├── metrics.py              # Performance monitoring (Prometheus)
 │   │   ├── alerts.py               # Slack/Email notifications for anomalies
-│   │   ├── __init__.py              # Package initializer
+│   │   ├── __init__.py             # Package initializer
 │
 │   ├── utils/                      # Utility Functions
 │   │   ├── config_loader.py        # Loads configurations
 │   │   ├── data_fetcher.py         # Fetches external data sources
 │   │   ├── logger.py               # Logging setup
-│   │   ├── __init__.py              # Package initializer
+│   │   ├── __init__.py             # Package initializer
 │
 ├── frontend/                       # Web Dashboard (React + Next.js)
 ├── tests/                          # Testing Suite
@@ -78,6 +89,7 @@ Automated-Trading-Agent/
 ├── .gitignore                      # Git Ignore Rules
 └── README.md                       # Project Overview
 └── .dockerignore                   # Docker Ignore Rules
+
 ```
 
 ## **🚀 Features**

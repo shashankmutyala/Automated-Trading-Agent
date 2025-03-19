@@ -147,7 +147,7 @@ class PriceDataManager:
             symbol=symbol.upper(),
             start_time=start_time_ms,
             end_time=end_time_ms,
-            collection_name="price_data"
+            collection_name="crypto_trading"
         )
 
         logger.info(f"Retrieved {len(df)} records from database for {symbol} from {start_time} to {end_time}")

@@ -7,7 +7,6 @@ Exposed components:
 - BinanceWebSocket: WebSocket client for live data streaming.
 """
 
-from .binance_ws import PriceDataManager
 from .binance_ws import BinanceWebSocket
 
-__all__ = ['PriceDataManager', 'BinanceWebSocket']
+__all__ = ['BinanceWebSocket']

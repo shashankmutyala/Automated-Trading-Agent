@@ -1,247 +1,174 @@
+import json
 import logging
-import pandas as pd
-from datetime import datetime, timedelta
 import asyncio
-import requests
-from .db.mongodb_handler import MongoDBHandler
-from .websockets.binance_ws import BinanceWebSocket
+import websockets
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-BINANCE_API_URL = "https://api.binance.com/api/v3"
 
+class BinanceWebSocket:
+    """
+    WebSocket client for Binance real-time price data.
+    """
 
-class PriceDataManager:
-    def __init__(self, db_handler=None):
+    def __init__(self, symbols=None):
         """
-        Initialize price data manager.
-
-        Args:
-            db_handler: MongoDB handler for storing and retrieving data
-        """
-        self.db_handler = db_handler or MongoDBHandler()
-        self.websocket = None
-
-    async def start_live_data(self, symbols=None):
-        """
-        Start collecting live price data from Binance WebSocket.
+        Initialize the WebSocket client.
 
         Args:
             symbols (list): List of symbols to track (e.g., ["btcusdt", "ethusdt"])
         """
-        symbols = symbols or ["btcusdt", "ethusdt"]
-        self.websocket = BinanceWebSocket(symbols)
+        self.symbols = symbols or ["btcusdt"]
+        self.callbacks = []
+        self.ws = None
+        self.running = False
+        self.task = None
 
-        # Add callback to store data in MongoDB
-        self.websocket.add_callback(self.store_live_price)
-
-        # Connect to WebSocket
-        await self.websocket.connect()
-
-    async def stop_live_data(self):
-        """Stop live data collection."""
-        if self.websocket:
-            await self.websocket.disconnect()
-
-    async def store_live_price(self, symbol, price, timestamp):
+    def add_callback(self, callback):
         """
-        Callback to store live price data in MongoDB.
+        Add a callback function to be called when price data is received.
 
         Args:
-            symbol (str): Trading pair symbol
-            price (float): Current price
-            timestamp (int): Unix timestamp in milliseconds
+            callback: Function to call with (symbol, price, timestamp)
         """
+        if callback not in self.callbacks:
+            self.callbacks.append(callback)
+
+    def remove_callback(self, callback):
+        """Remove a callback function."""
+        if callback in self.callbacks:
+            self.callbacks.remove(callback)
+
+    async def connect(self):
+        """Connect to Binance WebSocket and start listening for price data."""
+        if self.running:
+            logger.warning("WebSocket is already running")
+            return
+
+        self.running = True
+
+        # Format: symbol@trade for each symbol
+        streams = [f"{symbol.lower()}@trade" for symbol in self.symbols]
+
+        # Single stream or multiple streams
+        if len(streams) == 1:
+            ws_url = f"wss://stream.binance.com:9443/ws/{streams[0]}"
+        else:
+            streams_param = "/".join(streams)
+            ws_url = f"wss://stream.binance.com:9443/stream?streams={streams_param}"
+
+        logger.info(f"Connecting to Binance WebSocket: {ws_url}")
+
         try:
-            self.db_handler.store_price("price_data", symbol, price, timestamp)
-            logger.debug(f"Stored live price: {symbol} = {price}")
+            # Create WebSocket connection
+            self.ws = await websockets.connect(ws_url)
+
+            # Start the message handling task
+            self.task = asyncio.create_task(self._handle_messages())
+
+            logger.info("Connected to Binance WebSocket")
         except Exception as e:
-            logger.error(f"Failed to store live price: {e}")
+            self.running = False
+            logger.error(f"Failed to connect to Binance WebSocket: {e}")
+            raise
 
-    async def get_price_history(self, symbol, start_time, end_time=None,
-                                use_api_if_needed=True):
-        """
-        Get price history from database, optionally fetching missing data from API.
+    async def disconnect(self):
+        """Disconnect from Binance WebSocket."""
+        if not self.running:
+            return
 
-        Args:
-            symbol (str): Trading pair symbol
-            start_time (datetime): Start time
-            end_time (datetime): End time (default: current time)
-            use_api_if_needed (bool): Whether to fetch missing data from API
+        self.running = False
 
-        Returns:
-            pandas.DataFrame: Historical price data
-        """
-        # Convert datetime objects to milliseconds timestamp if needed
-        if isinstance(start_time, datetime):
-            start_time_ms = int(start_time.timestamp() * 1000)
-        else:
-            start_time_ms = start_time
-            start_time = datetime.fromtimestamp(start_time / 1000)
-
-        if end_time is None:
-            end_time = datetime.now()
-            end_time_ms = int(end_time.timestamp() * 1000)
-        elif isinstance(end_time, datetime):
-            end_time_ms = int(end_time.timestamp() * 1000)
-        else:
-            end_time_ms = end_time
-            end_time = datetime.fromtimestamp(end_time / 1000)
-
-        # First, check our database for the requested data
-        df = self.db_handler.get_price_dataframe(
-            symbol=symbol.upper(),
-            collection_name="price_data"
-        )
-
-        # Filter by time range
-        if not df.empty:
-            df = df[(df['timestamp'] >= start_time_ms) & (df['timestamp'] <= end_time_ms)]
-
-        # Check if we have complete data
-        if df.empty or use_api_if_needed:
-            have_complete_data = not df.empty
-
-            if have_complete_data:
-                # Check for gaps in data by analyzing timestamp differences
-                df = df.sort_values('timestamp')
-                time_diffs = df['timestamp'].diff()
-
-                # Assuming trades happen frequently, gaps > 5 minutes indicate missing data
-                max_acceptable_gap = 5 * 60 * 1000  # 5 minutes in milliseconds
-
-                if time_diffs.max() > max_acceptable_gap:
-                    have_complete_data = False
-                    logger.info(f"Found gaps in stored data for {symbol}. Will fetch from API.")
-
-            # If we don't have complete data and are allowed to use API
-            if not have_complete_data and use_api_if_needed:
-                logger.info(f"Fetching missing data from Binance API: {symbol} from {start_time} to {end_time}")
-                api_data = await self.fetch_historical_klines(
-                    symbol=symbol,
-                    interval="1m",  # Use 1-minute candles for detailed data
-                    start_time=start_time_ms,
-                    end_time=end_time_ms
-                )
-
-                if not api_data.empty:
-                    # If we have some data, merge with API data to fill gaps
-                    if not df.empty:
-                        df = pd.concat([df, api_data])
-                        df = df.drop_duplicates(subset=['timestamp']).sort_values('timestamp')
-                    else:
-                        df = api_data
-
-        return df
-
-    async def fetch_historical_klines(self, symbol, interval, start_time, end_time=None, limit=1000):
-        """
-        Fetch historical kline/candlestick data from Binance API.
-
-        Args:
-            symbol (str): Trading pair symbol
-            interval (str): Kline interval (1m, 3m, 5m, 15m, etc.)
-            start_time (int): Start time in milliseconds
-            end_time (int): End time in milliseconds
-            limit (int): Max number of records per request
-
-        Returns:
-            pandas.DataFrame: DataFrame with historical data
-        """
-        # Handle parameters
-        params = {
-            'symbol': symbol.upper(),
-            'interval': interval,
-            'startTime': start_time,
-            'limit': limit
-        }
-
-        if end_time:
-            params['endTime'] = end_time
-
-        all_klines = []
-        current_start = start_time
-
-        while True:
+        if self.task:
+            self.task.cancel()
             try:
-                url = f"{BINANCE_API_URL}/klines"
-                response = requests.get(url, params=params)
-                response.raise_for_status()
-                klines = response.json()
+                await self.task
+            except asyncio.CancelledError:
+                pass
 
-                if not klines:
-                    break
+        if self.ws:
+            await self.ws.close()
+            self.ws = None
 
-                # Store in database as we fetch
-                for kline in klines:
-                    timestamp = kline[0]  # Open time
-                    open_price = float(kline[1])
-                    high = float(kline[2])
-                    low = float(kline[3])
-                    close = float(kline[4])
-                    volume = float(kline[5])
+        logger.info("Disconnected from Binance WebSocket")
 
-                    # Store candle in database
-                    await asyncio.to_thread(
-                        self.db_handler.create_candle,
-                        symbol=symbol.upper(),
-                        interval=interval,
-                        open_price=open_price,
-                        high=high,
-                        low=low,
-                        close=close,
-                        volume=volume,
-                        timestamp=timestamp
-                    )
+    async def _handle_messages(self):
+        """Handle incoming WebSocket messages."""
+        if not self.ws:
+            logger.error("WebSocket not connected")
+            return
 
-                    # Store trade price point as well (using close price)
-                    await asyncio.to_thread(
-                        self.db_handler.store_price,
-                        "price_data",
-                        symbol.upper(),
-                        close,
-                        timestamp
-                    )
+        try:
+            while self.running:
+                message = await self.ws.recv()
 
-                all_klines.extend(klines)
+                try:
+                    data = json.loads(message)
 
-                # Update start time for next batch
-                current_start = klines[-1][0] + 1
-                params['startTime'] = current_start
+                    # Handle multi-stream format
+                    if 'data' in data and 'stream' in data:
+                        stream_data = data['data']
+                        symbol = stream_data['s'].upper()  # Symbol is in 's' field
+                        price = float(stream_data['p'])  # Price is in 'p' field
+                        timestamp = stream_data['T']  # Trade timestamp is in 'T' field
+                    # Handle single stream format
+                    else:
+                        symbol = data['s'].upper()  # Symbol is in 's' field
+                        price = float(data['p'])  # Price is in 'p' field
+                        timestamp = data['T']  # Trade timestamp is in 'T' field
 
-                # Check if we've reached the end time
-                if end_time and current_start >= end_time:
-                    break
+                    # Call all registered callbacks
+                    for callback in self.callbacks:
+                        try:
+                            if asyncio.iscoroutinefunction(callback):
+                                await callback(symbol, price, timestamp)
+                            else:
+                                callback(symbol, price, timestamp)
+                        except Exception as e:
+                            logger.error(f"Error in callback: {e}")
 
-                # Respect rate limits
-                await asyncio.sleep(0.5)
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to parse message: {message}")
+                except KeyError as e:
+                    logger.error(f"Missing expected field in message: {e}")
+                except Exception as e:
+                    logger.error(f"Error processing message: {e}")
 
-            except Exception as e:
-                logger.error(f"Failed to fetch historical data: {e}")
-                break
+        except asyncio.CancelledError:
+            # Task was cancelled - normal during shutdown
+            pass
+        except websockets.ConnectionClosed:
+            logger.error("WebSocket connection closed unexpectedly")
+            # Try to reconnect
+            if self.running:
+                logger.info("Attempting to reconnect...")
+                await asyncio.sleep(5)  # Wait before reconnecting
+                await self.connect()
+        except Exception as e:
+            logger.error(f"WebSocket error: {e}")
+            if self.running:
+                # Try to reconnect
+                logger.info("Attempting to reconnect after error...")
+                await asyncio.sleep(5)
+                await self.connect()
 
-        if not all_klines:
-            return pd.DataFrame()
 
-        # Convert to DataFrame
-        columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume',
-                   'close_time', 'quote_asset_volume', 'number_of_trades',
-                   'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore']
+# Simplified function-based interface
+async def binance_ws(symbols, callback):
+    """
+    Connect to Binance WebSocket and process price updates with a callback.
 
-        df = pd.DataFrame(all_klines, columns=columns)
+    Args:
+        symbols (list): List of symbols to track
+        callback: Function to call with (symbol, price, timestamp)
+    """
+    client = BinanceWebSocket(symbols)
+    client.add_callback(callback)
 
-        # Convert types
-        numeric_columns = ['open', 'high', 'low', 'close', 'volume',
-                           'quote_asset_volume', 'taker_buy_base_asset_volume',
-                           'taker_buy_quote_asset_volume']
+    await client.connect()
 
-        df[numeric_columns] = df[numeric_columns].apply(pd.to_numeric)
-        df['timestamp'] = pd.to_numeric(df['timestamp'])
-        df['symbol'] = symbol.upper()
-        df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
-
-        return df
-
+    return client  # Return client so caller can disconnect when done

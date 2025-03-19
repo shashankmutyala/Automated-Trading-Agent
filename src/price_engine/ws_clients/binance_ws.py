@@ -64,7 +64,7 @@ class BinanceWebSocket:
         logger.info(f"Connecting to Binance WebSocket: {ws_url}")
 
         try:
-            # Create WebSocket connection
+            # Use the standard websockets.connect method
             self.ws = await websockets.connect(ws_url)
 
             # Start the message handling task
@@ -172,3 +172,5 @@ async def binance_ws(symbols, callback):
     await client.connect()
 
     return client  # Return client so caller can disconnect when done
+
+

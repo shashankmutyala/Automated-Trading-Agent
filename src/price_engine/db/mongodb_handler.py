@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class MongoDBHandler:
-    def __init__(self, uri="mongodb://localhost:27017/", db_name="price_data"):
+    def __init__(self, uri="mongodb://localhost:27017/", db_name="crypto_trading"):
         """
         Initialize MongoDB connection and set up collections.
 

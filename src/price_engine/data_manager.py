@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import asyncio
 import requests
 from .db.mongodb_handler import MongoDBHandler
-from .websockets.binance_ws import BinanceWebSocket
+from .ws_clients.binance_ws import BinanceWebSocket
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,

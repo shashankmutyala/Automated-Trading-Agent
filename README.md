@@ -26,15 +26,18 @@ Automated-Trading-Agent/
 │   │   ├── __init__.py             # Package initializer
 │   │
 │   ├── price_engine/               # Price Engine for Real-Time Data
-│   │   ├── websockets/             # WebSocket Handlers for Data Sources
+│   │   ├── wb_clients/             # WebSocket Handlers for Data Sources
 │   │   │   ├── binance_ws.py       # Fetch BTC/ETH data from Binance
+│   │   │   ├── __init__.py         # Package initializer
 │   │   ├── db/                     # Database Storage Handlers
 │   │   │   ├── mongodb_handler.py  # Store price data in MongoDB
-│   │   │   ├── mysql_handler.py    # Store price data in MySQL
+│   │   │   ├── __init__.py         # Package initializer
 │   │   ├── processor.py            # Data processing for trading decisions
 │   │   ├── risk_management.py      # Risk management logic
+│   │   ├── data_manager.py         # Data management logic
 │   │   ├── order_executor.py       # Place buy/sell orders
 │   │   ├── __init__.py             # Package initializer
+│   │   ├── main.py                 # Main application entry point
 │   │
 │   ├── models/                     # AI/ML Models for Market Analysis
 │   │   ├── trend_predictor.py      # Predict price movements

@@ -31,4 +31,4 @@ async def fetch_all_symbols(symbols, start_time, end_time):
 symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
 
 # Run the function
-asyncio.run(fetch_all_symbols(symbols, "2025-03-19T19:33:00", "2025-03-19T19:34:00"))
+asyncio.run(fetch_all_symbols(symbols, "2025-03-20T16:48:07", "2025-03-20T16:52:28"))

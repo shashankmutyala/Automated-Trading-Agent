@@ -259,7 +259,7 @@ class PriceDataManager:
                     # Store trade price point as well (using close price)
                     await asyncio.to_thread(
                         self.db_handler.store_price,
-                        "price_data",
+                        "crypto_trading",
                         symbol.upper(),
                         close,
                         timestamp

@@ -1,143 +1,97 @@
- ## **Automated Trading Agent - Project Documentation**
+# Cryptocurrency Market Analysis
 
-## **📌 Overview**
-The **Automated Trading Agent** is a **modular, AI-driven crypto trading system** that integrates **machine learning models, on-chain & off-chain data sources, and LLM-based analysis** to optimize trading strategies. The system is designed to support **real-time trade execution, market analysis, and risk management.**
+This project implements machine learning models for cryptocurrency price prediction and market analysis using historical data from Binance.
 
-## **📂 Repository Structure**
-```
-Automated-Trading-Agent/
-├── config/                         # Configuration Management
-│   ├── default.yaml                # General settings
-│   ├── development.yaml            # Dev environment overrides
-│   ├── production.yaml             # Production-specific settings
-│   ├── secrets.yaml                # Encrypted sensitive data
-│   ├── loaders.py                  # Loads and validates configs
-│   ├── __init__.py                 # Package initializer
-│
-├── src/                            # Backend Core Logic
-│   ├── main.py                     # Main application entry point
-│   ├── __init__.py                 # Package initializer
-│   │
-│   ├── data_ingestion/             # Data Retrieval & Ingestion Pipelines
-│   │   ├── blockchain_provider.py  # Fetch on-chain data (Etherscan, BSCScan)
-│   │   ├── cex_api_provider.py     # Fetch market data from Binance, OKX
-│   │   ├── social_sentiment.py     # Scrape Twitter, Telegram, Discord, RSS
-│   │   ├── preprocessors.py        # Clean & structure data
-│   │   ├── __init__.py             # Package initializer
-│   │
-│   ├── price_engine/               # Price Engine for Real-Time Data
-│   │   ├── wb_clients/             # WebSocket Handlers for Data Sources
-│   │   │   ├── binance_ws.py       # Fetch BTC/ETH data from Binance
-│   │   │   ├── __init__.py         # Package initializer
-│   │   ├── db/                     # Database Storage Handlers
-│   │   │   ├── mongodb_handler.py  # Store price data in MongoDB
-│   │   │   ├── __init__.py         # Package initializer
-│   │   ├── processor.py            # Data processing for trading decisions
-│   │   ├── risk_management.py      # Risk management logic
-│   │   ├── data_manager.py         # Data management logic
-│   │   ├── order_executor.py       # Place buy/sell orders
-│   │   ├── __init__.py             # Package initializer
-│   │   ├── main.py                 # Main application entry point
-│   │
-│   ├── models/                     # AI/ML Models for Market Analysis
-│   │   ├── trend_predictor.py      # Predict price movements
-│   │   ├── sentiment_analysis.py   # NLP-based sentiment analysis
-│   │   ├── rl_trading_model.py     # Reinforcement learning trading agent
-│   │   ├── retrain_pipeline.py     # Model retraining & optimization
-│   │   ├── __init__.py             # Package initializer
-│   │
-│   ├── llm_agents/                 # AI Trading Agents
-│   │   ├── data_agent.py           # Fetch real-time & historical market data
-│   │   ├── analysis_agent.py       # LLM-based market analysis
-│   │   ├── trading_agent.py        # Executes trades and strategies
-│   │   ├── risk_manager.py         # Implements risk management strategies
-│   │   ├── self_learning_agent.py  # Adaptive RL-based agent
-│   │   ├── __init__.py             # Package initializer
-│   │
-│   ├── execution/                  # Trade Execution & Strategy Orchestration
-│   │   ├── strategy_orchestrator.py# Executes and manages trading strategies
-│   │   ├── order_executor.py       # Places/cancels trades via broker APIs
-│   │   ├── broker_api.py           # Interfaces with CEX/DEX APIs
-│   │   ├── __init__.py             # Package initializer
-│   │
-│   ├── api/                        # API Layer (REST/WebSocket)
-│   │   ├── api_routes.py           # REST API endpoints (FastAPI/Flask)
-│   │   ├── trade_execution.py      # Trading API layer (Binance, etc.)
-│   │   ├── __init__.py             # Package initializer
-│
-│   ├── database/                   # Data Storage (Trade History, AI Training Data)
-│   │   ├── trade_history.db        # Stores trade history (PostgreSQL)
-│   │   ├── vector_store.py         # Vector database for embeddings
-│   │   ├── __init__.py             # Package initializer
-│
-│   ├── observability/              # Logging, Monitoring & Alerts
-│   │   ├── logging.py              # Advanced logging setup
-│   │   ├── metrics.py              # Performance monitoring (Prometheus)
-│   │   ├── alerts.py               # Slack/Email notifications for anomalies
-│   │   ├── __init__.py             # Package initializer
-│
-│   ├── utils/                      # Utility Functions
-│   │   ├── config_loader.py        # Loads configurations
-│   │   ├── data_fetcher.py         # Fetches external data sources
-│   │   ├── logger.py               # Logging setup
-│   │   ├── __init__.py             # Package initializer
-│
-├── frontend/                       # Web Dashboard (React + Next.js)
-├── tests/                          # Testing Suite
-├── docs/                           # Documentation
-├── requirements.txt                # Python dependencies
-├── pyproject.toml                  # Poetry-based dependency management
-├── Dockerfile                      # Docker containerization setup
-├── .github/workflows/ci-cd.yml     # CI/CD pipeline for testing & deployment
-├── .gitignore                      # Git Ignore Rules
-└── README.md                       # Project Overview
-└── .dockerignore                   # Docker Ignore Rules
+## Project Structure
 
 ```
+├── data/               # Directory for cryptocurrency price data (CSV files)
+├── models/             # Saved trained models
+├── results/            # Analysis results, visualizations, and processed data
+├── src/                # Source code
+│   ├── preprocessing.py       # Data preprocessing and feature engineering
+│   ├── baseline_model.py      # Implementation of baseline ML models
+│   ├── crypto_pipeline.py     # End-to-end pipeline for analysis
+│   └── price_prediction.py    # Price prediction implementation
+```
 
-## **🚀 Features**
-✅ **Real-time Market Data** - Fetches data from **blockchain explorers, CEX APIs, and social sentiment sources.**  
-✅ **AI & LLM Trading Agents** - Uses **Reinforcement Learning & NLP-based Sentiment Analysis** to optimize trading strategies.  
-✅ **Risk Management** - Implements **position sizing, stop-loss, and volatility-adjusted trading decisions.**  
-✅ **Web-Based Dashboard** - Built with **React & Next.js** to visualize trade insights.  
-✅ **Automated CI/CD** - Uses **GitHub Actions** to ensure all code is tested and deployed automatically.  
-✅ **Dockerized Deployment** - Fully containerized for **scalable cloud deployment (AWS, GCP, DigitalOcean, etc.).**  
+## Features
 
-## **🛠️ Installation & Setup**
-### **1️⃣ Clone the Repository**
+- **Data Preprocessing**: Loading, cleaning, and feature engineering for cryptocurrency data
+- **Technical Indicators**: Calculation of various technical indicators (SMA, EMA, RSI, MACD, Bollinger Bands)
+- **Trading Signal Generation**: Automatic generation of trading signals based on price movements
+- **Model Training**: Implementation of MLP neural network, logistic regression, and random forest models
+- **Model Evaluation**: Comprehensive evaluation with accuracy, precision, recall, F1-score, and confusion matrices
+- **Visualization**: Visualizations of feature importance, model performance, and trading signals
+
+## Installation
+
+1. Clone the repository
+2. Install dependencies:
+
 ```bash
-git clone https://github.com/shashankmutyala/Automated-Trading-Agent.git
-cd Automated-Trading-Agent
-```
-
-### **2️⃣ Setup Virtual Environment & Install Dependencies**
-```bash
-python3 -m venv venv
-source venv/bin/activate  # (Linux/macOS)
-venv\Scripts\activate  # (Windows)
-
 pip install -r requirements.txt
 ```
 
-### **3️⃣ Run the Trading Simulation**
+## Usage
+
+### End-to-End Pipeline
+
+Run the complete analysis pipeline with default settings:
+
 ```bash
-python src/main.py
+python src/crypto_pipeline.py
 ```
 
-## **🐳 Set Up Docker**
-### **1️⃣ Build the Docker Image**
+### Command Line Options
+
 ```bash
-docker build -t automated-trading-agent .
+# Process specific cryptocurrencies
+python src/crypto_pipeline.py --symbols BTCUSDT ETHUSDT
+
+# Reprocess data and retrain models
+python src/crypto_pipeline.py --reprocess --retrain
+
+# Only run preprocessing step
+python src/crypto_pipeline.py --preprocess-only
+
+# Only run model training step
+python src/crypto_pipeline.py --train-only
 ```
 
-### **2️⃣ Run the Docker Container**
-```bash
-docker run --rm --gpus all automated-trading-agent
-```
+## Data Requirements
 
-## **📜 License**
-This project is licensed under the **MIT License**.
+The project expects Binance price data for each cryptocurrency in CSV format, stored in the `data/` directory. Each file should contain at least the following columns:
 
-## **📌 Disclaimer**
-This project is intended for **educational and research purposes only**. Cryptocurrency trading involves risk, and **we are not responsible for any financial losses** incurred using this software. Please conduct thorough research and comply with financial regulations before deploying this system in a live environment.
+- Open time
+- Open
+- High
+- Low
+- Close
+- Volume
 
+## Models
+
+### MLP Neural Network
+- Multi-layer perceptron with batch normalization and dropout
+- Early stopping and learning rate reduction
+- Optimized for 3-class classification (Buy/Hold/Sell)
+
+### Logistic Regression
+- Multinomial logistic regression
+- Class weights to handle imbalanced data
+- L2 regularization
+
+### Random Forest
+- Ensemble of decision trees
+- Feature importance analysis
+- Hyperparameter tuning
+
+## Results
+
+Analysis results are stored in the `results/` directory:
+- Processed data in CSV format
+- Feature visualizations
+- Model training history plots
+- Confusion matrices
+- Model comparison metrics

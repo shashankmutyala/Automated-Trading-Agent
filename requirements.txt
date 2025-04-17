@@ -26,3 +26,4 @@ PyYAML>=6.0
 
 # Web reporting
 jinja2>=3.0.0  # For HTML report templating
+websockets>=10.0  # For WebSocket communication

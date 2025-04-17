@@ -3,8 +3,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 import asyncio
 import requests
-from .db.mongodb_handler import MongoDBHandler
-from .ws_clients.binance_ws import BinanceWebSocket
+from src.price_engine.db.mongodb_handler import MongoDBHandler
+from src.price_engine.ws_clients.binance_ws import BinanceWebSocket
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,

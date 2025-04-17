@@ -40,23 +40,23 @@ pip install -r requirements.txt
 Run the complete analysis pipeline with default settings:
 
 ```bash
-python src/crypto_pipeline.py
+python new_method/crypto_pipeline.py
 ```
 
 ### Command Line Options
 
 ```bash
 # Process specific cryptocurrencies
-python src/crypto_pipeline.py --symbols BTCUSDT ETHUSDT
+python new_method/crypto_pipeline.py --symbols BTCUSDT ETHUSDT
 
 # Reprocess data and retrain models
-python src/crypto_pipeline.py --reprocess --retrain
+python new_method/crypto_pipeline.py --reprocess --retrain
 
 # Only run preprocessing step
-python src/crypto_pipeline.py --preprocess-only
+python new_method/crypto_pipeline.py --preprocess-only
 
 # Only run model training step
-python src/crypto_pipeline.py --train-only
+python new_method/crypto_pipeline.py --train-only
 ```
 
 ## Data Requirements

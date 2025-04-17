@@ -2,7 +2,7 @@ import json
 import logging
 import asyncio
 import websockets
-from datetime import datetime
+from datetime import datetime, timezone
 import requests
 
 # Configure logging
@@ -10,12 +10,10 @@ logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-
 class BinanceWebSocket:
     """
     WebSocket client for Binance real-time price data.
     """
-
     def __init__(self, symbols=None):
         """
         Initialize the WebSocket client.
@@ -28,8 +26,6 @@ class BinanceWebSocket:
         self.ws = None
         self.running = False
         self.task = None
-
-        # Track connection status and timing for backfill
         self.last_message_time = None
         self.disconnect_time = None
         self.reconnect_time = None
@@ -86,7 +82,7 @@ class BinanceWebSocket:
             # Use the standard websockets.connect method
             self.ws = await websockets.connect(ws_url)
             self.connection_status = "connected"
-            self.reconnect_time = datetime.now()
+            self.reconnect_time = datetime.now(timezone.utc)
 
             # Start the message handling task
             self.task = asyncio.create_task(self._handle_messages())
@@ -105,7 +101,7 @@ class BinanceWebSocket:
 
         self.running = False
         self.connection_status = "disconnected"
-        self.disconnect_time = datetime.now()
+        self.disconnect_time = datetime.now(timezone.utc)
 
         if self.task:
             self.task.cancel()
@@ -130,7 +126,7 @@ class BinanceWebSocket:
             while self.running:
                 message = await self.ws.recv()
                 # Record the time this message was received for backfill tracking
-                current_time = datetime.now()
+                current_time = datetime.now(timezone.utc)
                 self.last_message_time = current_time
 
                 try:
@@ -139,14 +135,14 @@ class BinanceWebSocket:
                     # Handle multi-stream format
                     if 'data' in data and 'stream' in data:
                         stream_data = data['data']
-                        symbol = stream_data['s'].upper()  # Symbol is in 's' field
-                        price = float(stream_data['p'])  # Price is in 'p' field
-                        timestamp = stream_data['T']  # Trade timestamp is in 'T' field
+                        symbol = stream_data['s'].upper()
+                        price = float(stream_data['p'])
+                        timestamp = stream_data['T']
                     # Handle single stream format
                     else:
-                        symbol = data['s'].upper()  # Symbol is in 's' field
-                        price = float(data['p'])  # Price is in 'p' field
-                        timestamp = data['T']  # Trade timestamp is in 'T' field
+                        symbol = data['s'].upper()
+                        price = float(data['p'])
+                        timestamp = data['T']
 
                     # Call all registered callbacks
                     for callback in self.callbacks:
@@ -171,17 +167,17 @@ class BinanceWebSocket:
         except websockets.ConnectionClosed:
             logger.error("WebSocket connection closed unexpectedly")
             self.connection_status = "disconnected"
-            self.disconnect_time = datetime.now()
+            self.disconnect_time = datetime.now(timezone.utc)
 
             # Try to reconnect with backfill
             if self.running:
                 logger.info("Attempting to reconnect with backfill...")
-                await asyncio.sleep(5)  # Wait before reconnecting
+                await asyncio.sleep(5)
                 await self.reconnect_with_backfill()
         except Exception as e:
             logger.error(f"WebSocket error: {e}")
             self.connection_status = "disconnected"
-            self.disconnect_time = datetime.now()
+            self.disconnect_time = datetime.now(timezone.utc)
 
             if self.running:
                 # Try to reconnect with backfill
@@ -192,7 +188,6 @@ class BinanceWebSocket:
     async def reconnect_with_backfill(self):
         """
         Reconnect to the WebSocket and fetch any data missed during the disconnection.
-        This addresses Test Criteria #3: Backfill data after WebSocket disconnect.
         """
         # Only attempt backfill if we know when we were disconnected
         has_timing_info = (self.disconnect_time is not None and
@@ -200,11 +195,11 @@ class BinanceWebSocket:
 
         if not has_timing_info:
             logger.warning("Cannot backfill: missing disconnection timing information")
-            await self.connect()  # Just reconnect without backfill
+            await self.connect()
             return
 
         # Record reconnection time
-        self.reconnect_time = datetime.now()
+        self.reconnect_time = datetime.now(timezone.utc)
 
         # Connect first to resume the real-time data flow
         await self.connect()
@@ -233,7 +228,7 @@ class BinanceWebSocket:
             # Process the missed data through our regular callbacks
             for kline in missed_data:
                 # Extract the data we need
-                timestamp = kline[0]  # Open time
+                timestamp = kline[6]  # Close time
                 close_price = float(kline[4])  # Close price
 
                 # Call the regular callbacks with the backfilled data
@@ -246,15 +241,15 @@ class BinanceWebSocket:
                     except Exception as e:
                         logger.error(f"Error in callback with backfilled data: {e}")
 
-            # Also notify specialized missed data callbacks
-            for callback in self.missed_data_callbacks:
-                try:
-                    if asyncio.iscoroutinefunction(callback):
-                        await callback(symbol_upper, missed_data)
-                    else:
-                        callback(symbol_upper, missed_data)
-                except Exception as e:
-                    logger.error(f"Error in missed data callback: {e}")
+                # Also notify specialized missed data callbacks
+                for callback in self.missed_data_callbacks:
+                    try:
+                        if asyncio.iscoroutinefunction(callback):
+                            await callback(symbol_upper, missed_data)
+                        else:
+                            callback(symbol_upper, missed_data)
+                    except Exception as e:
+                        logger.error(f"Error in missed data callback: {e}")
 
     async def _fetch_missed_klines(self, symbol, start_time, end_time, interval="2m"):
         """
@@ -264,7 +259,7 @@ class BinanceWebSocket:
             symbol (str): Trading pair symbol (e.g., "BTCUSDT")
             start_time (int): Start time in milliseconds
             end_time (int): End time in milliseconds
-            interval (str): Kline interval (default: "1m")
+            interval (str): Kline interval (default: "2m")
 
         Returns:
             list: List of klines or None if error
@@ -276,7 +271,7 @@ class BinanceWebSocket:
                 "interval": interval,
                 "startTime": start_time,
                 "endTime": end_time,
-                "limit": 2000  # Maximum allowed
+                "limit": 2000
             }
 
             # Make request asynchronously
@@ -294,7 +289,6 @@ class BinanceWebSocket:
             logger.error(f"Failed to fetch missed klines: {e}")
             return None
 
-
 # Simplified function-based interface
 async def binance_ws(symbols, callback):
     """
@@ -310,3 +304,22 @@ async def binance_ws(symbols, callback):
     await client.connect()
 
     return client  # Return client so caller can disconnect when done
+
+if __name__ == "__main__":
+    import asyncio
+
+    async def main():
+        async def print_price(symbol, price, timestamp):
+            print(f"Symbol: {symbol}, Price: {price}, Timestamp: {timestamp}")
+
+        symbols = ["btcusdt"]
+        symbols1 = ["ethusdt"]  # Not used, but kept as in original code
+
+        client = await binance_ws(symbols1, print_price)
+        try:
+            while True:
+                await asyncio.sleep(1)  # Keep the program running
+        except KeyboardInterrupt:
+            await client.disconnect()  # Gracefully disconnect on Ctrl+C
+
+    asyncio.run(main())

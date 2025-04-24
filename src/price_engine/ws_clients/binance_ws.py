@@ -1,221 +1,312 @@
-import websocket
 import json
-import threading
-import time
 import logging
+import asyncio
+import websockets
 from datetime import datetime
-from web3 import Web3
+import requests
 
+# Configure logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class BinanceWebSocketClient:
-    def __init__(self, symbol="btcusdt", on_message_callback=None):
-        self.symbol = symbol.lower()
-        self.ws_url = f"wss://stream.binance.com:9443/ws/{self.symbol}@trade"
+
+class BinanceWebSocket:
+    """
+    WebSocket client for Binance real-time price data.
+    """
+
+    def __init__(self, symbols=None):
+        """
+        Initialize the WebSocket client.
+
+        Args:
+            symbols (list): List of symbols to track (e.g., ["btcusdt", "ethusdt"])
+        """
+        self.symbols = symbols
+        self.callbacks = []
         self.ws = None
-        self.on_message_callback = on_message_callback
         self.running = False
-        self.last_data_time = None
-        self.missed_data = []
+        self.task = None
 
-    def on_message(self, ws, message):
-        data = json.loads(message)
-        price = float(data["p"])
-        timestamp = datetime.utcfromtimestamp(data["T"] / 1000)
-        self.last_data_time = timestamp
-        if self.on_message_callback:
-            self.on_message_callback({
-                "timestamp": timestamp,
-                "price": price,
-                "volume": float(data["q"]),
-                "source": "binance"
-            })
+        # Track connection status and timing for backfill
+        self.last_message_time = None
+        self.disconnect_time = None
+        self.reconnect_time = None
+        self.connection_status = "disconnected"
+        self.missed_data_callbacks = []
 
-    def on_error(self, ws, error):
-        logger.error(f"WebSocket error: {error}")
+    def add_callback(self, callback):
+        """
+        Add a callback function to be called when price data is received.
 
-    def on_close(self, ws, close_status_code, close_msg):
-        logger.info("WebSocket closed")
-        self.running = False
+        Args:
+            callback: Function to call with (symbol, price, timestamp)
+        """
+        if callback not in self.callbacks:
+            self.callbacks.append(callback)
 
-    def on_open(self, ws):
-        logger.info("WebSocket opened")
-        self.running = True
+    def remove_callback(self, callback):
+        """Remove a callback function."""
+        if callback in self.callbacks:
+            self.callbacks.remove(callback)
 
-    def start(self):
-        self.ws = websocket.WebSocketApp(
-            self.ws_url,
-            on_message=self.on_message,
-            on_error=self.on_error,
-            on_close=self.on_close,
-            on_open=self.on_open
-        )
-        threading.Thread(target=self.ws.run_forever, daemon=True).start()
+    def add_missed_data_callback(self, callback):
+        """
+        Add a callback for missed data during reconnection.
 
-    def stop(self):
-        if self.ws:
-            self.ws.close()
+        Args:
+            callback: Function to call with (symbol, missed_data)
+        """
+        if callback not in self.missed_data_callbacks:
+            self.missed_data_callbacks.append(callback)
 
-    def backfill_missed_data(self, api_client):
-        if not self.last_data_time:
-            logger.warning("No last data time available for backfilling.")
+    async def connect(self):
+        """Connect to Binance WebSocket and start listening for price data."""
+        if self.running:
+            logger.warning("WebSocket is already running")
             return
 
-        start_time = int(self.last_data_time.timestamp() * 1000)
-        end_time = int(datetime.now().timestamp() * 1000)
-        logger.info(f"Backfilling data from {self.last_data_time} ({start_time}) to now ({end_time})")
+        self.running = True
+        self.connection_status = "connecting"
+
+        # Format: symbol@trade for each symbol
+        streams = [f"{symbol.lower()}@trade" for symbol in self.symbols]
+
+        # Single stream or multiple streams
+        if len(streams) == 1:
+            ws_url = f"wss://stream.binance.com:9443/ws/{streams[0]}"
+        else:
+            streams_param = "/".join(streams)
+            ws_url = f"wss://stream.binance.com:9443/stream?streams={streams_param}"
+
+        logger.info(f"Connecting to Binance WebSocket: {ws_url}")
 
         try:
-            missed_trades = api_client.fetch_historical_trades(self.symbol.upper(), start_time, end_time)
-            if not missed_trades:
-                logger.warning("No historical trades returned for the backfill period.")
-                return
+            # Use the standard websockets.connect method
+            self.ws = await websockets.connect(ws_url)
+            self.connection_status = "connected"
+            self.reconnect_time = datetime.now()
 
-            logger.info(f"Fetched {len(missed_trades)} trades for backfilling.")
-            self.missed_data.extend(missed_trades)
-            for trade in missed_trades:
-                if self.on_message_callback:
-                    self.on_message_callback({
-                        "timestamp": trade["timestamp"],
-                        "price": trade["price"],
-                        "volume": trade["volume"],
-                        "source": trade["source"]
-                    })
+            # Start the message handling task
+            self.task = asyncio.create_task(self._handle_messages())
+
+            logger.info("Connected to Binance WebSocket")
         except Exception as e:
-            logger.error(f"Error during backfill: {e}")
+            self.running = False
+            self.connection_status = "disconnected"
+            logger.error(f"Failed to connect to Binance WebSocket: {e}")
+            raise
 
-class UniswapWebSocketClient:
-    def __init__(self, w3, pair, on_message_callback=None):
-        self.w3 = w3
-        self.token0, self.token1 = pair
-        self.on_message_callback = on_message_callback
+    async def disconnect(self):
+        """Disconnect from Binance WebSocket."""
+        if not self.running:
+            return
+
         self.running = False
-        self.last_data_time = None
-        self.missed_data = []
+        self.connection_status = "disconnected"
+        self.disconnect_time = datetime.now()
 
-        factory_address = self.w3.to_checksum_address("0x1f98431c8ad98523631ae4a59f267346ea31f984")
-        factory_abi = [
-            {
-                "inputs": [
-                    {"internalType": "address", "name": "token0", "type": "address"},
-                    {"internalType": "address", "name": "token1", "type": "address"},
-                    {"internalType": "uint24", "name": "fee", "type": "uint24"}
-                ],
-                "name": "getPool",
-                "outputs": [{"internalType": "address", "name": "pool", "type": "address"}],
-                "stateMutability": "view",
-                "type": "function"
-            }
-        ]
-        factory_contract = self.w3.eth.contract(address=factory_address, abi=factory_abi)
-        # Ensure token addresses are in checksum format
-        token0_checksum = self.w3.to_checksum_address(self.token0)
-        token1_checksum = self.w3.to_checksum_address(self.token1)
-        self.pool_address = factory_contract.functions.getPool(token0_checksum, token1_checksum, 3000).call()
+        if self.task:
+            self.task.cancel()
+            try:
+                await self.task
+            except asyncio.CancelledError:
+                pass
 
-        self.pool_abi = [
-            {
-                "anonymous": False,
-                "inputs": [
-                    {"indexed": True, "internalType": "address", "name": "sender", "type": "address"},
-                    {"indexed": True, "internalType": "address", "name": "recipient", "type": "address"},
-                    {"indexed": False, "internalType": "int256", "name": "amount0", "type": "int256"},
-                    {"indexed": False, "internalType": "int256", "name": "amount1", "type": "int256"},
-                    {"indexed": False, "internalType": "uint160", "name": "sqrtPriceX96", "type": "uint160"},
-                    {"indexed": False, "internalType": "uint128", "name": "liquidity", "type": "uint128"},
-                    {"indexed": False, "internalType": "int24", "name": "tick", "type": "int24"}
-                ],
-                "name": "Swap",
-                "type": "event"
-            }
-        ]
-        self.pool_contract = self.w3.eth.contract(address=self.pool_address, abi=self.pool_abi)
+        if self.ws:
+            await self.ws.close()
+            self.ws = None
 
-    def on_message(self, event):
-        amount0 = float(event["args"]["amount0"]) / 1e8  # WBTC (8 decimals)
-        amount1 = float(event["args"]["amount1"]) / 1e6  # USDC (6 decimals)
-        if self.token0 == "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2":  # WETH (18 decimals)
-            amount0 = float(event["args"]["amount0"]) / 1e18
-        elif self.token0 == "0x570a5d26f7765ecb712c0924e4de2af7e458c554":  # Wrapped SOL (9 decimals)
-            amount0 = float(event["args"]["amount0"]) / 1e9
-        price = abs(amount1 / amount0) if amount0 != 0 else 0
-        timestamp = datetime.utcfromtimestamp(self.w3.eth.get_block(event["blockNumber"])["timestamp"])
-        self.last_data_time = timestamp
-        if self.on_message_callback:
-            self.on_message_callback({
-                "timestamp": timestamp,
-                "price": price,
-                "volume": abs(amount1),
-                "source": "uniswap"
-            })
+        logger.info("Disconnected from Binance WebSocket")
 
-    def on_error(self, error):
-        logger.error(f"WebSocket error: {error}")
+    async def _handle_messages(self):
+        """Handle incoming WebSocket messages."""
+        if not self.ws:
+            logger.error("WebSocket not connected")
+            return
 
-    def on_close(self):
-        logger.info("Event listener stopped")
-        self.running = False
-
-    def on_open(self):
-        logger.info("Event listener started")
-        self.running = True
-
-    def start(self):
-        self.running = True
-        event_filter = self.pool_contract.events.Swap.create_filter(from_block="latest")  # Updated to from_block
-        threading.Thread(target=self._listen_for_events, args=(event_filter,), daemon=True).start()
-
-    def _listen_for_events(self, event_filter):
-        self.on_open()
         try:
             while self.running:
-                for event in event_filter.get_new_entries():
-                    self.on_message(event)
-                time.sleep(1)
+                message = await self.ws.recv()
+                # Record the time this message was received for backfill tracking
+                current_time = datetime.now()
+                self.last_message_time = current_time
+
+                try:
+                    data = json.loads(message)
+
+                    # Handle multi-stream format
+                    if 'data' in data and 'stream' in data:
+                        stream_data = data['data']
+                        symbol = stream_data['s'].upper()  # Symbol is in 's' field
+                        price = float(stream_data['p'])  # Price is in 'p' field
+                        timestamp = stream_data['T']  # Trade timestamp is in 'T' field
+                    # Handle single stream format
+                    else:
+                        symbol = data['s'].upper()  # Symbol is in 's' field
+                        price = float(data['p'])  # Price is in 'p' field
+                        timestamp = data['T']  # Trade timestamp is in 'T' field
+
+                    # Call all registered callbacks
+                    for callback in self.callbacks:
+                        try:
+                            if asyncio.iscoroutinefunction(callback):
+                                await callback(symbol, price, timestamp)
+                            else:
+                                callback(symbol, price, timestamp)
+                        except Exception as e:
+                            logger.error(f"Error in callback: {e}")
+
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to parse message: {message}")
+                except KeyError as e:
+                    logger.error(f"Missing expected field in message: {e}")
+                except Exception as e:
+                    logger.error(f"Error processing message: {e}")
+
+        except asyncio.CancelledError:
+            # Task was cancelled - normal during shutdown
+            pass
+        except websockets.ConnectionClosed:
+            logger.error("WebSocket connection closed unexpectedly")
+            self.connection_status = "disconnected"
+            self.disconnect_time = datetime.now()
+
+            # Try to reconnect with backfill
+            if self.running:
+                logger.info("Attempting to reconnect with backfill...")
+                await asyncio.sleep(5)  # Wait before reconnecting
+                await self.reconnect_with_backfill()
         except Exception as e:
-            self.on_error(e)
-        finally:
-            self.on_close()
+            logger.error(f"WebSocket error: {e}")
+            self.connection_status = "disconnected"
+            self.disconnect_time = datetime.now()
 
-    def stop(self):
-        self.running = False
+            if self.running:
+                # Try to reconnect with backfill
+                logger.info("Attempting to reconnect after error...")
+                await asyncio.sleep(5)
+                await self.reconnect_with_backfill()
 
-    def backfill_missed_data(self, api_client):
-        if not self.last_data_time:
-            logger.warning("No last data time available for backfilling.")
+    async def reconnect_with_backfill(self):
+        """
+        Reconnect to the WebSocket and fetch any data missed during the disconnection.
+        This addresses Test Criteria #3: Backfill data after WebSocket disconnect.
+        """
+        # Only attempt backfill if we know when we were disconnected
+        has_timing_info = (self.disconnect_time is not None and
+                           self.last_message_time is not None)
+
+        if not has_timing_info:
+            logger.warning("Cannot backfill: missing disconnection timing information")
+            await self.connect()  # Just reconnect without backfill
             return
 
-        start_time = int(self.last_data_time.timestamp() * 1000)
-        end_time = int(datetime.now().timestamp() * 1000)
-        logger.info(f"Backfilling data from {self.last_data_time} ({start_time}) to now ({end_time})")
+        # Record reconnection time
+        self.reconnect_time = datetime.now()
 
+        # Connect first to resume the real-time data flow
+        await self.connect()
+
+        # Calculate the time window of missed data
+        start_ms = int(self.last_message_time.timestamp() * 1000)
+        end_ms = int(self.reconnect_time.timestamp() * 1000)
+
+        logger.info(f"Fetching missed data from {self.last_message_time} to {self.reconnect_time}")
+
+        # Fetch and process missed data for each symbol
+        for symbol in self.symbols:
+            symbol_upper = symbol.upper()
+            # Fetch missed klines (candlestick data)
+            missed_data = await self._fetch_missed_klines(
+                symbol=symbol_upper,
+                start_time=start_ms,
+                end_time=end_ms
+            )
+
+            if not missed_data:
+                continue
+
+            logger.info(f"Backfilled {len(missed_data)} data points for {symbol_upper}")
+
+            # Process the missed data through our regular callbacks
+            for kline in missed_data:
+                # Extract the data we need
+                timestamp = kline[0]  # Open time
+                close_price = float(kline[4])  # Close price
+
+                # Call the regular callbacks with the backfilled data
+                for callback in self.callbacks:
+                    try:
+                        if asyncio.iscoroutinefunction(callback):
+                            await callback(symbol_upper, close_price, timestamp)
+                        else:
+                            callback(symbol_upper, close_price, timestamp)
+                    except Exception as e:
+                        logger.error(f"Error in callback with backfilled data: {e}")
+
+            # Also notify specialized missed data callbacks
+            for callback in self.missed_data_callbacks:
+                try:
+                    if asyncio.iscoroutinefunction(callback):
+                        await callback(symbol_upper, missed_data)
+                    else:
+                        callback(symbol_upper, missed_data)
+                except Exception as e:
+                    logger.error(f"Error in missed data callback: {e}")
+
+    async def _fetch_missed_klines(self, symbol, start_time, end_time, interval="2m"):
+        """
+        Fetch klines (candlestick data) for the period of disconnection.
+
+        Args:
+            symbol (str): Trading pair symbol (e.g., "BTCUSDT")
+            start_time (int): Start time in milliseconds
+            end_time (int): End time in milliseconds
+            interval (str): Kline interval (default: "1m")
+
+        Returns:
+            list: List of klines or None if error
+        """
         try:
-            missed_trades = api_client.fetch_historical_trades((self.token0, self.token1), start_time, end_time)
-            if not missed_trades:
-                logger.warning("No historical trades returned for the backfill period.")
-                return
+            url = "https://api.binance.com/api/v3/klines"
+            params = {
+                "symbol": symbol,
+                "interval": interval,
+                "startTime": start_time,
+                "endTime": end_time,
+                "limit": 2000  # Maximum allowed
+            }
 
-            logger.info(f"Fetched {len(missed_trades)} trades for backfilling.")
-            self.missed_data.extend(missed_trades)
-            for trade in missed_trades:
-                if self.on_message_callback:
-                    self.on_message_callback({
-                        "timestamp": trade["timestamp"],
-                        "price": trade["price"],
-                        "volume": trade["volume"],
-                        "source": trade["source"]
-                    })
+            # Make request asynchronously
+            response = await asyncio.to_thread(
+                requests.get,
+                url,
+                params=params
+            )
+
+            response.raise_for_status()
+            klines = response.json()
+
+            return klines
         except Exception as e:
-            logger.error(f"Error during backfill: {e}")
+            logger.error(f"Failed to fetch missed klines: {e}")
+            return None
 
-def get_websocket_client(exchange, w3=None, symbol=None, pair=None, on_message_callback=None):
-    if exchange.lower() == "binance":
-        if not symbol:
-            raise ValueError("Symbol required for Binance WebSocket client")
-        return BinanceWebSocketClient(symbol=symbol, on_message_callback=on_message_callback)
-    elif exchange.lower() == "uniswap":
-        if not w3 or not pair:
-            raise ValueError("Web3 instance and token pair required for Uniswap WebSocket client")
-        return UniswapWebSocketClient(w3, pair, on_message_callback)
-    else:
-        raise ValueError(f"Unsupported exchange: {exchange}")
+
+# Simplified function-based interface
+async def binance_ws(symbols, callback):
+    """
+    Connect to Binance WebSocket and process price updates with a callback.
+
+    Args:
+        symbols (list): List of symbols to track
+        callback: Function to call with (symbol, price, timestamp)
+    """
+    client = BinanceWebSocket(symbols)
+    client.add_callback(callback)
+
+    await client.connect()
+
+    return client  # Return client so caller can disconnect when done

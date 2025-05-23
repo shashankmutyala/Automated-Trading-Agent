@@ -1,7 +1,7 @@
 # backend/analytics/main.py
 
-from sentiment_pipeline import fetch_bitcoin_posts, apply_sentiment, save_sentiment_to_csv
-from ml_models import load_real_market_data, train_market_models
+from .sentiment_pipeline import fetch_bitcoin_posts, apply_sentiment, save_sentiment_to_csv
+from .ml_models import load_real_market_data, train_market_models
 
 def run_sentiment_pipeline():
     print("\n📥 Running Reddit Sentiment Analysis...")

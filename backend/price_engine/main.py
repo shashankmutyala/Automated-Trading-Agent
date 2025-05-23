@@ -12,6 +12,7 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
+print(os.getenv("INFURA_API_KEY"))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -117,6 +118,7 @@ if __name__ == "__main__":
         )
         ws_clients.append(ws_client)
         ws_client.start()
+
 
     time.sleep(5)  # Run for 5 seconds
     logger.info("Disconnecting WebSockets for 10 seconds...")
